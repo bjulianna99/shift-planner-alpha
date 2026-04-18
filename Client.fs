@@ -1,182 +1,168 @@
 namespace DUE_FSharp_SPASandbox_2026
 
+open System
 open WebSharper
-open WebSharper.JavaScript
 open WebSharper.UI
 open WebSharper.UI.Html
-open WebSharper.UI.Client
 open WebSharper.UI.Templating
-open WebSharper.Sitelets
-
-type EndPoint =
-    | [<EndPoint "">] Home
-    | [<EndPoint "echo">] Echo of string
-    | [<EndPoint "form">] Form
-    | [<EndPoint "forms">] Forms
-    | [<EndPoint "charting">] Charting
-    | [<EndPoint "maps">] Maps
 
 [<JavaScript>]
 module Client =
-    // The templates are loaded from the DOM, so you just can edit index.html
-    // and refresh your browser, no need to recompile unless you add or remove holes.
+
     type IndexTemplate = Template<"wwwroot/index.html", ClientLoad.FromDocument>
 
-    let People =
-        ListModel.FromSeq [
-            "John"
-            "Paul"
+    type ShiftType =
+        | Day
+        | Night
+        | Rest
+        | Leave
+
+    type ShiftEntry = {
+        Date: DateTime
+        ShiftType: ShiftType
+        Note: string
+    }
+
+    let shiftTypeToText shiftType =
+        match shiftType with
+        | Day -> "Day shift"
+        | Night -> "Night shift"
+        | Rest -> "Rest day"
+        | Leave -> "Leave"
+
+    let shiftTypeBadgeClass shiftType =
+        match shiftType with
+        | Day -> "bg-blue-100 text-blue-700"
+        | Night -> "bg-purple-100 text-purple-700"
+        | Rest -> "bg-green-100 text-green-700"
+        | Leave -> "bg-yellow-100 text-yellow-700"
+
+    let sampleShifts = [
+        {
+            Date = DateTime(2026, 4, 20)
+            ShiftType = Day
+            Note = "Regular day shift"
+        }
+        {
+            Date = DateTime(2026, 4, 21)
+            ShiftType = Night
+            Note = "Night duty"
+        }
+        {
+            Date = DateTime(2026, 4, 22)
+            ShiftType = Rest
+            Note = "Scheduled rest day"
+        }
+        {
+            Date = DateTime(2026, 4, 23)
+            ShiftType = Day
+            Note = "Morning shift"
+        }
+        {
+            Date = DateTime(2026, 4, 24)
+            ShiftType = Leave
+            Note = "Personal leave"
+        }
+    ]
+
+    let renderShiftEntry entry =
+        div [attr.``class`` "bg-white rounded-xl shadow-sm border border-gray-200 p-4 mb-4"] [
+            div [attr.``class`` "flex flex-col md:flex-row md:items-center md:justify-between gap-3"] [
+                div [] [
+                    h3 [attr.``class`` "text-lg font-semibold text-gray-800"] [
+                        text (entry.Date.ToString("yyyy-MM-dd"))
+                    ]
+                    p [attr.``class`` "text-gray-600 mt-1"] [
+                        text entry.Note
+                    ]
+                ]
+
+                span [attr.``class`` ("inline-block px-3 py-1 rounded-full text-sm font-medium " + shiftTypeBadgeClass entry.ShiftType)] [
+                    text (shiftTypeToText entry.ShiftType)
+                ]
+            ]
         ]
 
-    // Create a router for our endpoints
-    let router = Router.Infer<EndPoint>()
-    // Install our client-side router and track the current page
-    let currentPage = Router.InstallHash EndPoint.Home router
+    let pageContent =
+        div [attr.``class`` "space-y-8"] [
 
-    module Pages =
-        let Home () =
-            async {
-                // ... expensive server-side calls
-                let res = IndexTemplate.HomePageClient().Doc()
-                return res
-            }
+            section [attr.id "home"] [
+                div [attr.``class`` "bg-white rounded-2xl shadow-sm border border-gray-200 p-6 md:p-8"] [
+                    h1 [attr.``class`` "text-3xl md:text-4xl font-bold text-gray-900 mb-4"] [
+                        text "Shift Planner Alpha"
+                    ]
 
-        let Echo (msg:string) =
-            text msg
+                    p [attr.``class`` "text-lg text-gray-700 mb-4"] [
+                        text "A simple F# WebSharper application for managing and viewing shift schedules."
+                    ]
 
-        let FormPage () =
-            IndexTemplate.Form()
-                .OnSubmit(fun e ->
-                    let v = e.Vars.Name.Value
-                    JS.Alert <| sprintf "You typed: %s" v
-                )
-                .Doc()
-
-        open WebSharper.Forms
-
-        let Forms () =
-            let res = Var.Create ""
-            Form.Return (fun fn ln age ->
-                { FirstName = fn; LastName = ln; Age = int age })
-            <*> (Form.Yield "Your first name"
-                |> Validation.IsNotEmpty "Please a name.")
-            <*> (Form.Yield "Your last name"
-                |> Validation.IsNotEmpty "Please a name.")
-            <*> Form.Yield "0"
-            |> Form.WithSubmit
-            |> Form.Run (fun p ->
-                async {
-                    let! ret = Server.SavePerson p
-                    match ret with
-                    | Some p ->
-                        res.Set <| sprintf "Saved %A!" p
-                    | None ->
-                        res.Set <| "Failure!"
-                } |> Async.StartImmediate
-            )
-            |> Form.Render (fun fn ln age submitter ->
-                IndexTemplate.PersonForm()
-                    .FirstName(fn)
-                    .LastName(ln)
-                    .Age(age)
-                    .OnSubmit(fun e ->
-                        submitter.Trigger())
-                    .Result(res.View)
-                    .Doc()
-            )
-
-        open WebSharper.Charting
-
-        let Charting() =
-            let labels =
-                [| "Eating"; "Drinking"; "Sleeping";
-                   "Designing"; "Coding"; "Cycling"; "Running" |]
-            let dataset1 = [|28.0; 48.0; 40.0; 19.0; 96.0; 27.0; 100.0|]
-            let dataset2 = [|65.0; 59.0; 90.0; 81.0; 56.0; 55.0; 40.0|]
-    
-            let chart =
-                Chart.Combine [
-                    Chart.Radar(Array.zip labels dataset1)
-                        .WithFillColor(Color.Rgba(151, 187, 205, 0.2))
-                        .WithStrokeColor(Color.Name "blue")
-                        .WithPointColor(Color.Name "darkblue")
-                        .WithTitle("Alice")
-
-                    Chart.Radar(Array.zip labels dataset2)
-                        .WithFillColor(Color.Rgba(220, 220, 220, 0.2))
-                        .WithStrokeColor(Color.Name "green")
-                        .WithPointColor(Color.Name "darkgreen")
-                        .WithTitle("Bob")
+                    p [attr.``class`` "text-gray-600"] [
+                        text "This is the first project version with a custom layout and static sample shift entries."
+                    ]
                 ]
-    
-            Renderers.ChartJs.Render(chart, Size = Size(500, 300))
-
-        open WebSharper.Leaflet
-        
-        let Maps() =
-            let coordinates = div [] [] :?> Elt
-            Leaflet.Styles.Style()
-            div [] [
-                div [
-                    attr.style "height: 500px;"
-                    on.afterRender (fun div ->
-                        let map = Leaflet.L.Map(div)
-                        map.SetView((47.49883, 19.0582), 14)
-                        map.AddLayer(
-                            Leaflet.TileLayer(
-                                Leaflet.TileLayer.OpenStreetMap.UrlTemplate,
-                                Leaflet.TileLayer.Options(
-                                    Attribution = Leaflet.TileLayer.OpenStreetMap.Attribution)))
-                        map.AddLayer(
-                            let m = Leaflet.Marker((47.4952, 19.07114))
-                            m.BindPopup("IntelliFactory")
-                            m)
-                        map.On_mousemove(fun map ev ->
-                            coordinates.Text <- "Position: " + ev.Latlng.ToString())
-                        map.On_mouseout(fun map ev ->
-                            coordinates.Text <- "")
-                    )
-                ] []
-                coordinates
             ]
+
+            section [attr.``class`` "grid md:grid-cols-3 gap-4"] [
+                div [attr.``class`` "bg-blue-50 border border-blue-200 rounded-xl p-4"] [
+                    h2 [attr.``class`` "text-lg font-semibold text-blue-800 mb-2"] [
+                        text "Current stage"
+                    ]
+                    p [attr.``class`` "text-blue-700"] [
+                        text "Initial project skeleton"
+                    ]
+                ]
+
+                div [attr.``class`` "bg-white border border-gray-200 rounded-xl p-4"] [
+                    h2 [attr.``class`` "text-lg font-semibold text-gray-800 mb-2"] [
+                        text "Entries"
+                    ]
+                    p [attr.``class`` "text-gray-600"] [
+                        text (string sampleShifts.Length + " sample shifts")
+                    ]
+                ]
+
+                div [attr.``class`` "bg-white border border-gray-200 rounded-xl p-4"] [
+                    h2 [attr.``class`` "text-lg font-semibold text-gray-800 mb-2"] [
+                        text "Status"
+                    ]
+                    p [attr.``class`` "text-gray-600"] [
+                        text "Static preview version"
+                    ]
+                ]
+            ]
+
+            section [attr.id "sample-shifts"] [
+                div [attr.``class`` "flex items-center justify-between mb-4"] [
+                    h2 [attr.``class`` "text-2xl font-semibold text-gray-800"] [
+                        text "Sample shift entries"
+                    ]
+                ]
+
+                div [] (
+                    sampleShifts
+                    |> List.map renderShiftEntry
+                )
+            ]
+
+            section [attr.id "about-project"] [
+                div [attr.``class`` "bg-white rounded-2xl shadow-sm border border-gray-200 p-6"] [
+                    h2 [attr.``class`` "text-2xl font-semibold text-gray-800 mb-3"] [
+                        text "About this project"
+                    ]
+
+                    p [attr.``class`` "text-gray-700 mb-3"] [
+                        text "Shift Planner Alpha is being developed step by step as a semester project."
+                    ]
+
+                    p [attr.``class`` "text-gray-600"] [
+                        text "Later versions will include adding shifts, deleting entries, sorting, summaries, and workload analysis."
+                    ]
+                ]
+            ]
+        ]
 
     [<SPAEntryPoint>]
     let Main () =
-        let newName = Var.Create ""
-
-        let renderInnerPage (currentPage: Var<EndPoint>) =
-            currentPage.View.Map (fun endpoint ->
-                match endpoint with
-                | Home ->
-                    Pages.Home()
-                    |> Doc.Async
-                | Echo msg ->
-                    Pages.Echo msg
-                | Form ->
-                    Pages.FormPage()
-                | Forms ->
-                    Pages.Forms()
-                | Charting ->
-                    Pages.Charting()
-                | Maps ->
-                    Pages.Maps()
-            )
-            |> Doc.EmbedView
-
         IndexTemplate()
-            .Content(
-                renderInnerPage currentPage
-                //client (...)
-                //hydrate (...)
-            )
-            //.ListContainer(
-            //    People.View.DocSeqCached(fun (name: string) ->
-            //        IndexTemplate.ListItem().Name(name).Doc()
-            //    )
-            //)
-            //.Name(newName)
-            //.Add(fun e ->
-            //    People.Add(newName.Value)
-            //    newName.Value <- ""
-            //)
+            .Content(pageContent)
             .Bind()
