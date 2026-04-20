@@ -4,6 +4,7 @@ open System
 open WebSharper
 open WebSharper.UI
 open WebSharper.UI.Html
+open WebSharper.UI.Client
 open WebSharper.UI.Templating
 
 [<JavaScript>]
@@ -65,6 +66,49 @@ module Client =
         }
     ]
 
+    let shiftsVar = Var.Create sampleShifts
+
+    let dateInputVar = Var.Create ""
+    let noteInputVar = Var.Create ""
+    let selectedShiftTypeVar = Var.Create Day
+    let formMessageVar = Var.Create ""
+
+    let removeShift entry =
+        let updated =
+            shiftsVar.Value
+            |> List.filter (fun x ->
+                not (
+                    x.Date = entry.Date &&
+                    x.ShiftType = entry.ShiftType &&
+                    x.Note = entry.Note
+                )
+            )
+
+        shiftsVar.Set updated
+
+    let addShift () =
+        let rawDate = dateInputVar.Value.Trim()
+        let rawNote = noteInputVar.Value.Trim()
+
+        match DateTime.TryParse(rawDate) with
+        | true, parsedDate ->
+            if rawNote = "" then
+                formMessageVar.Set "Please enter a note."
+            else
+                let newEntry = {
+                    Date = parsedDate
+                    ShiftType = selectedShiftTypeVar.Value
+                    Note = rawNote
+                }
+
+                shiftsVar.Set (shiftsVar.Value @ [ newEntry ])
+                dateInputVar.Set ""
+                noteInputVar.Set ""
+                selectedShiftTypeVar.Set Day
+                formMessageVar.Set "Shift entry added successfully."
+        | false, _ ->
+            formMessageVar.Set "Invalid date format. Use yyyy-MM-dd."
+
     let renderShiftEntry entry =
         div [attr.``class`` "bg-white rounded-xl shadow-sm border border-gray-200 p-4 mb-4"] [
             div [attr.``class`` "flex flex-col md:flex-row md:items-center md:justify-between gap-3"] [
@@ -77,11 +121,94 @@ module Client =
                     ]
                 ]
 
-                span [attr.``class`` ("inline-block px-3 py-1 rounded-full text-sm font-medium " + shiftTypeBadgeClass entry.ShiftType)] [
-                    text (shiftTypeToText entry.ShiftType)
+                div [attr.``class`` "flex items-center gap-3 flex-wrap"] [
+                    span [attr.``class`` ("inline-block px-3 py-1 rounded-full text-sm font-medium " + shiftTypeBadgeClass entry.ShiftType)] [
+                        text (shiftTypeToText entry.ShiftType)
+                    ]
+
+                    button [
+                        attr.``class`` "px-3 py-1 rounded-lg bg-red-500 hover:bg-red-600 text-white text-sm font-medium transition"
+                        on.click (fun _ _ -> removeShift entry)
+                    ] [
+                        text "Delete"
+                    ]
                 ]
             ]
         ]
+
+    let shiftTypeSelectorButton shiftType labelText =
+        button [
+            attr.``type`` "button"
+            attr.``class`` "px-3 py-2 rounded-lg border text-sm font-medium transition bg-white text-gray-700 border-gray-300 hover:bg-gray-50"
+            on.click (fun _ _ -> selectedShiftTypeVar.Set shiftType)
+        ] [
+            text labelText
+        ]
+
+    let statsCards () =
+        Doc.BindView (fun (shifts: ShiftEntry list) ->
+            let totalCount = List.length shifts
+            let dayCount = shifts |> List.filter (fun x -> x.ShiftType = Day) |> List.length
+            let nightCount = shifts |> List.filter (fun x -> x.ShiftType = Night) |> List.length
+            let restLeaveCount = shifts |> List.filter (fun x -> (x.ShiftType = Rest) || (x.ShiftType = Leave)) |> List.length
+
+            section [attr.``class`` "grid md:grid-cols-4 gap-4"] [
+                div [attr.``class`` "bg-blue-50 border border-blue-200 rounded-xl p-4"] [
+                    h2 [attr.``class`` "text-lg font-semibold text-blue-800 mb-2"] [
+                        text "Current stage"
+                    ]
+                    p [attr.``class`` "text-blue-700"] [
+                        text "Interactive project version"
+                    ]
+                ]
+
+                div [attr.``class`` "bg-white border border-gray-200 rounded-xl p-4"] [
+                    h2 [attr.``class`` "text-lg font-semibold text-gray-800 mb-2"] [
+                        text "Entries"
+                    ]
+                    p [attr.``class`` "text-gray-600"] [
+                        text (string totalCount + " shift entries")
+                    ]
+                ]
+
+                div [attr.``class`` "bg-white border border-gray-200 rounded-xl p-4"] [
+                    h2 [attr.``class`` "text-lg font-semibold text-gray-800 mb-2"] [
+                        text "Day / Night"
+                    ]
+                    p [attr.``class`` "text-gray-600"] [
+                        text ("Day: " + string dayCount + " | Night: " + string nightCount)
+                    ]
+                ]
+
+                div [attr.``class`` "bg-white border border-gray-200 rounded-xl p-4"] [
+                    h2 [attr.``class`` "text-lg font-semibold text-gray-800 mb-2"] [
+                        text "Rest / Leave"
+                    ]
+                    p [attr.``class`` "text-gray-600"] [
+                        text (string restLeaveCount + " entries")
+                    ]
+                ]
+            ]
+        ) shiftsVar.View
+
+    let shiftList () =
+        Doc.BindView (fun (shifts: ShiftEntry list) ->
+            div [] (
+                shifts
+                |> List.sortBy (fun x -> x.Date)
+                |> List.map renderShiftEntry
+            )
+        ) shiftsVar.View
+
+    let formMessage () =
+        Doc.BindView (fun messageText ->
+            if messageText = "" then
+                Doc.Empty
+            else
+                p [attr.``class`` "text-sm text-gray-600 mt-3"] [
+                    text messageText
+                ]
+        ) formMessageVar.View
 
     let pageContent =
         div [attr.``class`` "space-y-8"] [
@@ -97,51 +224,76 @@ module Client =
                     ]
 
                     p [attr.``class`` "text-gray-600"] [
-                        text "This is the first project version with a custom layout and static sample shift entries."
+                        text "This version already supports adding and deleting shift entries in an interactive interface."
                     ]
                 ]
             ]
 
-            section [attr.``class`` "grid md:grid-cols-3 gap-4"] [
-                div [attr.``class`` "bg-blue-50 border border-blue-200 rounded-xl p-4"] [
-                    h2 [attr.``class`` "text-lg font-semibold text-blue-800 mb-2"] [
-                        text "Current stage"
-                    ]
-                    p [attr.``class`` "text-blue-700"] [
-                        text "Initial project skeleton"
-                    ]
-                ]
+            statsCards ()
 
-                div [attr.``class`` "bg-white border border-gray-200 rounded-xl p-4"] [
-                    h2 [attr.``class`` "text-lg font-semibold text-gray-800 mb-2"] [
-                        text "Entries"
+            section [attr.id "add-shift"] [
+                div [attr.``class`` "bg-white rounded-2xl shadow-sm border border-gray-200 p-6"] [
+                    h2 [attr.``class`` "text-2xl font-semibold text-gray-800 mb-4"] [
+                        text "Add new shift"
                     ]
-                    p [attr.``class`` "text-gray-600"] [
-                        text (string sampleShifts.Length + " sample shifts")
-                    ]
-                ]
 
-                div [attr.``class`` "bg-white border border-gray-200 rounded-xl p-4"] [
-                    h2 [attr.``class`` "text-lg font-semibold text-gray-800 mb-2"] [
-                        text "Status"
+                    div [attr.``class`` "grid md:grid-cols-2 gap-4"] [
+                        div [] [
+                            label [attr.``class`` "block text-sm font-medium text-gray-700 mb-2"] [
+                                text "Date"
+                            ]
+                            Doc.InputType.Text [
+                                attr.``class`` "w-full px-4 py-2 rounded-lg border border-gray-300"
+                                attr.placeholder "yyyy-MM-dd"
+                            ] dateInputVar
+                        ]
+
+                        div [] [
+                            label [attr.``class`` "block text-sm font-medium text-gray-700 mb-2"] [
+                                text "Note"
+                            ]
+                            Doc.InputType.Text [
+                                attr.``class`` "w-full px-4 py-2 rounded-lg border border-gray-300"
+                                attr.placeholder "Enter shift note"
+                            ] noteInputVar
+                        ]
                     ]
-                    p [attr.``class`` "text-gray-600"] [
-                        text "Static preview version"
+
+                    div [attr.``class`` "mt-4"] [
+                        label [attr.``class`` "block text-sm font-medium text-gray-700 mb-2"] [
+                            text "Shift type"
+                        ]
+
+                        div [attr.``class`` "flex flex-wrap gap-2"] [
+                            shiftTypeSelectorButton Day "Day shift"
+                            shiftTypeSelectorButton Night "Night shift"
+                            shiftTypeSelectorButton Rest "Rest day"
+                            shiftTypeSelectorButton Leave "Leave"
+                        ]
                     ]
+
+                    div [attr.``class`` "mt-4"] [
+                        button [
+                            attr.``type`` "button"
+                            attr.``class`` "px-5 py-2 rounded-lg bg-blue-600 text-white font-medium"
+                            on.click (fun _ _ -> addShift ())
+                        ] [
+                            text "Add shift"
+                        ]
+                    ]
+
+                    formMessage ()
                 ]
             ]
 
             section [attr.id "sample-shifts"] [
                 div [attr.``class`` "flex items-center justify-between mb-4"] [
                     h2 [attr.``class`` "text-2xl font-semibold text-gray-800"] [
-                        text "Sample shift entries"
+                        text "Shift entries"
                     ]
                 ]
 
-                div [] (
-                    sampleShifts
-                    |> List.map renderShiftEntry
-                )
+                shiftList ()
             ]
 
             section [attr.id "about-project"] [
@@ -155,7 +307,7 @@ module Client =
                     ]
 
                     p [attr.``class`` "text-gray-600"] [
-                        text "Later versions will include adding shifts, deleting entries, sorting, summaries, and workload analysis."
+                        text "Later versions can include sorting, filtering, summaries, and workload analysis."
                     ]
                 ]
             ]
