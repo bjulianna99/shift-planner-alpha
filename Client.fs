@@ -3,6 +3,7 @@ namespace DUE_FSharp_SPASandbox_2026
 
 open System
 open WebSharper
+open WebSharper.JavaScript
 open WebSharper.UI
 open WebSharper.UI.Html
 open WebSharper.UI.Client
@@ -167,14 +168,18 @@ module Client =
 
                     button [
                         attr.``class`` "px-3 py-1 rounded-lg bg-red-500 hover:bg-red-600 text-white text-sm font-medium transition"
-                        on.click (fun _ _ -> 
-                            removeShift entry
-                            formMessageVar.Set "Shift deleted"
-                            
-                            async {
-                                do! Async.Sleep 2000
-                                formMessageVar.Set ""
-                            } |> Async.Start
+                        on.click (fun _ _ ->
+                            let confirmed = JS.Window.Confirm("Are you sure you want to delete this shift entry?")
+
+                            if confirmed then (
+                                removeShift entry
+                                formMessageVar.Set "Shift deleted"
+
+                                async {
+                                    do! Async.Sleep 2000
+                                    formMessageVar.Set ""
+                                } |> Async.Start
+                            )
                         )
                     ] [
                         text "Delete"
@@ -184,22 +189,39 @@ module Client =
         ]
 
     let shiftTypeSelectorButton shiftType labelText =
-        button [
-            attr.``type`` "button"
-            attr.``class`` "px-3 py-2 rounded-lg border text-sm font-medium transition bg-white text-gray-700 border-gray-300 hover:bg-gray-50"
-            on.click (fun _ _ -> selectedShiftTypeVar.Set shiftType)
-        ] [
-            text labelText
-        ]
+        Doc.BindView (fun selected ->
+            let buttonClass =
+                if selected = shiftType then
+                    "px-3 py-2 rounded-lg border text-sm font-medium transition bg-blue-600 text-white border-blue-600"
+                else
+                    "px-3 py-2 rounded-lg border text-sm font-medium transition bg-white text-gray-700 border-gray-300 hover:bg-gray-50"
+
+            button [
+                attr.``type`` "button"
+                attr.``class`` buttonClass
+                on.click (fun _ _ -> selectedShiftTypeVar.Set shiftType)
+            ] [
+                text labelText
+            ]
+        ) selectedShiftTypeVar.View
 
     let filterSelectorButton filter labelText =
-        button [
-            attr.``type`` "button"
-            attr.``class`` "px-3 py-2 rounded-lg border text-sm font-medium transition bg-white text-gray-700 border-gray-300 hover:bg-gray-50"
-            on.click (fun _ _ -> selectedFilterVar.Set filter)
-        ] [
-            text labelText        
-        ]
+        Doc.BindView (fun selected ->
+            let buttonClass =
+                if selected = filter then
+                    "px-3 py-2 rounded-lg border text-sm font-medium transition bg-gray-800 text-white border-gray-800"
+                else
+                    "px-3 py-2 rounded-lg border text-sm font-medium transition bg-white text-gray-700 border-gray-300 hover:bg-gray-50"
+
+            button [
+                attr.``type`` "button"
+                attr.``class`` buttonClass
+                on.click (fun _ _ -> selectedFilterVar.Set filter)
+            ] [
+                text labelText
+            ]
+        ) selectedFilterVar.View
+        
 
     let statsCards () =
         Doc.BindView (fun (shifts: ShiftEntry list) ->
@@ -323,7 +345,7 @@ module Client =
                             label [attr.``class`` "block text-sm font-medium text-gray-700 mb-2"] [
                                 text "Date"
                             ]
-                            Doc.InputType.Text [
+                            Doc.InputType.Date [
                                 attr.``class`` "w-full px-4 py-2 rounded-lg border border-gray-300"
                             ] dateInputVar
                         ]
