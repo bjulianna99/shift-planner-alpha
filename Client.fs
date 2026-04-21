@@ -1,3 +1,4 @@
+
 namespace DUE_FSharp_SPASandbox_2026
 
 open System
@@ -18,6 +19,13 @@ module Client =
         | Rest
         | Leave
 
+    type ShiftFilter =
+        | All
+        | OnlyDay
+        | OnlyNight
+        | OnlyRest
+        | OnlyLeave
+
     type ShiftEntry = {
         Date: DateTime
         ShiftType: ShiftType
@@ -31,12 +39,28 @@ module Client =
         | Rest -> "Rest day"
         | Leave -> "Leave"
 
+    let shiftFilterToText shiftFilter =
+        match shiftFilter with
+        | All -> "All"
+        | OnlyDay -> "Day"
+        | OnlyNight -> "Night"
+        | OnlyRest -> "Rest"
+        | OnlyLeave -> "Leave"
+
     let shiftTypeBadgeClass shiftType =
         match shiftType with
         | Day -> "bg-blue-100 text-blue-700"
         | Night -> "bg-purple-100 text-purple-700"
         | Rest -> "bg-green-100 text-green-700"
         | Leave -> "bg-yellow-100 text-yellow-700"
+
+    let filterShifts filter shifts =
+        match filter with
+        | All -> shifts
+        | OnlyDay -> shifts |> List.filter (fun x -> x.ShiftType = Day)
+        | OnlyNight -> shifts |> List.filter (fun x -> x.ShiftType = Night)
+        | OnlyRest -> shifts |> List.filter (fun x -> x.ShiftType = Rest)
+        | OnlyLeave -> shifts |> List.filter (fun x -> x.ShiftType = Leave)
 
     let sampleShifts = [
         {
@@ -72,18 +96,12 @@ module Client =
     let noteInputVar = Var.Create ""
     let selectedShiftTypeVar = Var.Create Day
     let formMessageVar = Var.Create ""
+    let selectedFilterVar = Var.Create All
 
     let removeShift entry =
         let updated =
             shiftsVar.Value
-            |> List.filter (fun x ->
-                not (
-                    x.Date = entry.Date &&
-                    x.ShiftType = entry.ShiftType &&
-                    x.Note = entry.Note
-                )
-            )
-
+            |> List.filter (fun x -> x <> entry)
         shiftsVar.Set updated
 
     let addShift () =
@@ -95,17 +113,38 @@ module Client =
             if rawNote = "" then
                 formMessageVar.Set "Please enter a note."
             else
-                let newEntry = {
-                    Date = parsedDate
-                    ShiftType = selectedShiftTypeVar.Value
-                    Note = rawNote
-                }
+                let exists =
+                    shiftsVar.Value
+                    |> List.exists (fun x -> x.Date = parsedDate && x.Note = rawNote)
 
-                shiftsVar.Set (shiftsVar.Value @ [ newEntry ])
-                dateInputVar.Set ""
-                noteInputVar.Set ""
-                selectedShiftTypeVar.Set Day
-                formMessageVar.Set "Shift entry added successfully."
+                if exists then
+                    formMessageVar.Set "This shift already exists."
+
+                    async {
+                        do! Async.Sleep 2000
+                        formMessageVar.Set ""
+                    } |> Async.Start
+                else
+                    let newEntry = {
+                        Date = parsedDate
+                        ShiftType = selectedShiftTypeVar.Value
+                        Note = rawNote
+                    }
+
+                    shiftsVar.Set (
+                        shiftsVar.Value 
+                        @ [ newEntry ]
+                        |> List.sortBy (fun x -> x.Date)
+                    )
+                    dateInputVar.Set ""
+                    noteInputVar.Set ""
+                    selectedShiftTypeVar.Set Day
+                    formMessageVar.Set "Shift entry added successfully."
+
+                    async {
+                        do! Async.Sleep 2000
+                        formMessageVar.Set ""
+                    } |> Async.Start
         | false, _ ->
             formMessageVar.Set "Invalid date format. Use yyyy-MM-dd."
 
@@ -128,7 +167,15 @@ module Client =
 
                     button [
                         attr.``class`` "px-3 py-1 rounded-lg bg-red-500 hover:bg-red-600 text-white text-sm font-medium transition"
-                        on.click (fun _ _ -> removeShift entry)
+                        on.click (fun _ _ -> 
+                            removeShift entry
+                            formMessageVar.Set "Shift deleted"
+                            
+                            async {
+                                do! Async.Sleep 2000
+                                formMessageVar.Set ""
+                            } |> Async.Start
+                        )
                     ] [
                         text "Delete"
                     ]
@@ -145,6 +192,15 @@ module Client =
             text labelText
         ]
 
+    let filterSelectorButton filter labelText =
+        button [
+            attr.``type`` "button"
+            attr.``class`` "px-3 py-2 rounded-lg border text-sm font-medium transition bg-white text-gray-700 border-gray-300 hover:bg-gray-50"
+            on.click (fun _ _ -> selectedFilterVar.Set filter)
+        ] [
+            text labelText        
+        ]
+
     let statsCards () =
         Doc.BindView (fun (shifts: ShiftEntry list) ->
             let totalCount = List.length shifts
@@ -152,15 +208,7 @@ module Client =
             let nightCount = shifts |> List.filter (fun x -> x.ShiftType = Night) |> List.length
             let restLeaveCount = shifts |> List.filter (fun x -> (x.ShiftType = Rest) || (x.ShiftType = Leave)) |> List.length
 
-            section [attr.``class`` "grid md:grid-cols-4 gap-4"] [
-                div [attr.``class`` "bg-blue-50 border border-blue-200 rounded-xl p-4"] [
-                    h2 [attr.``class`` "text-lg font-semibold text-blue-800 mb-2"] [
-                        text "Current stage"
-                    ]
-                    p [attr.``class`` "text-blue-700"] [
-                        text "Interactive project version"
-                    ]
-                ]
+            section [attr.``class`` "grid md:grid-cols-3 gap-4"] [
 
                 div [attr.``class`` "bg-white border border-gray-200 rounded-xl p-4"] [
                     h2 [attr.``class`` "text-lg font-semibold text-gray-800 mb-2"] [
@@ -189,15 +237,27 @@ module Client =
                     ]
                 ]
             ]
+
         ) shiftsVar.View
 
     let shiftList () =
         Doc.BindView (fun (shifts: ShiftEntry list) ->
-            div [] (
-                shifts
-                |> List.sortBy (fun x -> x.Date)
-                |> List.map renderShiftEntry
-            )
+            Doc.BindView (fun currentFilter ->
+                let filteredShifts =
+                    shifts
+                    |> List.sortBy (fun x -> x.Date)
+                    |> filterShifts currentFilter
+
+                if List.isEmpty filteredShifts then
+                    div [attr.``class`` "bg-white rounded-xl border border-gray-200 p-4 text-gray-500"] [
+                        text "No shift entries found for this filter."
+                    ]
+                else
+                    div [] (
+                        filteredShifts
+                        |> List.map renderShiftEntry
+                    )
+            ) selectedFilterVar.View
         ) shiftsVar.View
 
     let formMessage () =
@@ -209,6 +269,27 @@ module Client =
                     text messageText
                 ]
         ) formMessageVar.View
+
+    let projectDetailsSection =
+        details [attr.``class`` "bg-white rounded-2xl shadow-sm border border-gray-200 p-6"] [
+            summary [attr.``class`` "text-xl font-semibold text-gray-800 cursor-pointer"] [
+                text "About"
+            ]
+
+            div [attr.``class`` "mt-4 space-y-4"] [
+                div [] [
+                    h3 [attr.``class`` "text-lg font-semibold text-gray-800 mb-2"] [
+                        text "About this project"
+                    ]
+                    p [attr.``class`` "text-gray-700 mb-3"] [
+                        text "Shift Planner Alpha is being developed step by step as a semester project."
+                    ]
+                    p [attr.``class`` "text-gray-600"] [
+                        text "Later versions can include sorting, filtering, summaries, and workload analysis."
+                    ]
+                ]
+            ]
+        ]
 
     let pageContent =
         div [attr.``class`` "space-y-8"] [
@@ -244,7 +325,6 @@ module Client =
                             ]
                             Doc.InputType.Text [
                                 attr.``class`` "w-full px-4 py-2 rounded-lg border border-gray-300"
-                                attr.placeholder "yyyy-MM-dd"
                             ] dateInputVar
                         ]
 
@@ -287,30 +367,30 @@ module Client =
             ]
 
             section [attr.id "sample-shifts"] [
-                div [attr.``class`` "flex items-center justify-between mb-4"] [
+                div [attr.``class`` "flex flex-col gap-4 mb-4"] [
                     h2 [attr.``class`` "text-2xl font-semibold text-gray-800"] [
                         text "Shift entries"
+                    ]
+                    div [] [
+                        p [attr.``class`` "text-sm font-medium text-gray-700 mb-2"] [
+                            text "Filter"
+                        ]
+
+                        div [attr.``class`` "flex flex-wrap gap-2"] [
+                            filterSelectorButton All "All"
+                            filterSelectorButton OnlyDay "Day"
+                            filterSelectorButton OnlyNight "Night"
+                            filterSelectorButton OnlyRest "Rest"
+                            filterSelectorButton OnlyLeave "Leave"
+                        ]
                     ]
                 ]
 
                 shiftList ()
             ]
 
-            section [attr.id "about-project"] [
-                div [attr.``class`` "bg-white rounded-2xl shadow-sm border border-gray-200 p-6"] [
-                    h2 [attr.``class`` "text-2xl font-semibold text-gray-800 mb-3"] [
-                        text "About this project"
-                    ]
+            projectDetailsSection
 
-                    p [attr.``class`` "text-gray-700 mb-3"] [
-                        text "Shift Planner Alpha is being developed step by step as a semester project."
-                    ]
-
-                    p [attr.``class`` "text-gray-600"] [
-                        text "Later versions can include sorting, filtering, summaries, and workload analysis."
-                    ]
-                ]
-            ]
         ]
 
     [<SPAEntryPoint>]
