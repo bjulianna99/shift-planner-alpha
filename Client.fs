@@ -55,6 +55,46 @@ module Client =
         | Rest -> "bg-green-100 text-green-700"
         | Leave -> "bg-yellow-100 text-yellow-700"
 
+    let getDateStatus (date: DateTime) =
+        let today = DateTime.Today
+
+        if date.Date < today then
+            "Completed"
+        elif date.Date = today then
+            "Today"
+        else
+            "Upcoming"
+
+    let dateStatusBadgeClass (date:DateTime) =
+        let today = DateTime.Today
+
+        if date.Date < today then
+            "bg-gray-200 text-gray-700"
+        elif date.Date = today then
+            "bg-orange-100 text-orange-700"
+        else 
+            "bg-teal-100 text-teal-700"
+
+    let getShiftStatus (date: DateTime) =
+        let today = DateTime.Today
+
+        if date.Date = today then
+            "Today"
+        elif date.Date < today then
+            "Past"
+        else
+            "Upcoming"
+
+    let shiftStatusBadgeClass (date: DateTime) =
+        let today = DateTime.Today
+
+        if date.Date = today then
+            "bg-orange-100 text-orange-700"
+        elif date.Date < today then 
+            "bg-gray-200 text-gray-700"
+        else 
+            "bg-teal-100 text-teal-700"
+
     let filterShifts filter shifts =
         match filter with
         | All -> shifts
@@ -162,7 +202,13 @@ module Client =
             formMessageVar.Set "Invalid date format. Use yyyy-MM-dd."
 
     let renderShiftEntry entry =
-        div [attr.``class`` "bg-white rounded-xl shadow-sm border border-gray-200 p-4 mb-4"] [
+        let cardClass =
+            if entry.Date.Date < DateTime.Today then
+                "bg-gray-50 rounded-xl shadow-sm border border-gray-200 p-4 mb-4 opacity-80"
+            else
+                "bg-white rounded-xl shadow-sm border border-gray-200 p-4 mb-4"
+
+        div [attr.``class`` cardClass] [
             div [attr.``class`` "flex flex-col md:flex-row md:items-center md:justify-between gap-3"] [
                 div [] [
                     h3 [attr.``class`` "text-lg font-semibold text-gray-800"] [
@@ -173,9 +219,13 @@ module Client =
                     ]
                 ]
 
+
                 div [attr.``class`` "flex items-center gap-3 flex-wrap"] [
                     span [attr.``class`` ("inline-block px-3 py-1 rounded-full text-sm font-medium " + shiftTypeBadgeClass entry.ShiftType)] [
                         text (shiftTypeToText entry.ShiftType)
+                    ]
+                    span [attr.``class`` ("inline-block px-3 py-1 rounded-full text-sm font-medium " + shiftStatusBadgeClass entry.Date)] [
+                        text (getShiftStatus entry.Date)
                     ]
 
                     button [
