@@ -98,6 +98,7 @@ module Client =
     let selectedShiftTypeVar = Var.Create Day
     let formMessageVar = Var.Create ""
     let selectedFilterVar = Var.Create All
+    let editingShiftVar : Var<option<ShiftEntry>> = Var.Create None
 
     let removeShift entry =
         let updated =
@@ -132,11 +133,22 @@ module Client =
                         Note = rawNote
                     }
 
-                    shiftsVar.Set (
-                        shiftsVar.Value 
-                        @ [ newEntry ]
-                        |> List.sortBy (fun x -> x.Date)
-                    )
+                    match editingShiftVar.Value with
+                    | Some oldEntry ->
+                        let updated =
+                            shiftsVar.Value
+                            |> List.map (fun x -> if x = oldEntry then newEntry else x)
+
+                        shiftsVar.Set (updated |> List.sortBy (fun x -> x.Date))
+                        editingShiftVar.Set None
+
+                    | None ->
+                        shiftsVar.Set (
+                            shiftsVar.Value
+                            @ [ newEntry]
+                            |> List.sortBy (fun x -> x.Date)
+                        )
+                    
                     dateInputVar.Set ""
                     noteInputVar.Set ""
                     selectedShiftTypeVar.Set Day
@@ -164,6 +176,18 @@ module Client =
                 div [attr.``class`` "flex items-center gap-3 flex-wrap"] [
                     span [attr.``class`` ("inline-block px-3 py-1 rounded-full text-sm font-medium " + shiftTypeBadgeClass entry.ShiftType)] [
                         text (shiftTypeToText entry.ShiftType)
+                    ]
+
+                    button [
+                        attr.``class`` "px-3 py-1 rounded-lg bg-gray-500 hover:bg-gray-600 text-white text-sm font-medium transition"
+                        on.click (fun _ _ ->
+                            editingShiftVar.Set (Some entry)
+                            dateInputVar.Set (entry.Date.ToString("yyyy-MM-dd"))
+                            noteInputVar.Set entry.Note
+                            selectedShiftTypeVar.Set entry.ShiftType
+                        )
+                    ] [
+                        text "Edit"
                     ]
 
                     button [
@@ -380,7 +404,22 @@ module Client =
                             attr.``class`` "px-5 py-2 rounded-lg bg-blue-600 text-white font-medium"
                             on.click (fun _ _ -> addShift ())
                         ] [
-                            text "Add shift"
+                            Doc.BindView (fun editing ->
+                                match editing with
+                                | Some _ -> 
+                                    button [
+                                        attr.``class`` "ml-3 px-5 py-2 rounded-lg bg-gray-300 text-gray-800 font-medium"
+                                        on.click (fun _ _ ->
+                                            editingShiftVar.Set None
+                                            dateInputVar.Set ""
+                                            noteInputVar.Set ""
+                                            selectedShiftTypeVar.Set Day
+                                        )
+                                    ] [
+                                        text "Cancel"
+                                    ]
+                                | None -> Doc.Empty
+                            ) editingShiftVar.View
                         ]
                     ]
 
