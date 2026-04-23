@@ -25,6 +25,11 @@ The goal of the project was to build a small but useful shift planning applicati
 ## How to run
 
 dotnet run
+Look for a localhost link in the terminal
+
+## Live try demo
+
+https://bjulianna99.github.io/shift-planner-alpha/
 
 ## Screenshot
 
