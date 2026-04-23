@@ -55,26 +55,6 @@ module Client =
         | Rest -> "bg-green-100 text-green-700"
         | Leave -> "bg-yellow-100 text-yellow-700"
 
-    let getDateStatus (date: DateTime) =
-        let today = DateTime.Today
-
-        if date.Date < today then
-            "Completed"
-        elif date.Date = today then
-            "Today"
-        else
-            "Upcoming"
-
-    let dateStatusBadgeClass (date:DateTime) =
-        let today = DateTime.Today
-
-        if date.Date < today then
-            "bg-gray-200 text-gray-700"
-        elif date.Date = today then
-            "bg-orange-100 text-orange-700"
-        else 
-            "bg-teal-100 text-teal-700"
-
     let getShiftStatus (date: DateTime) =
         let today = DateTime.Today
 
@@ -181,18 +161,21 @@ module Client =
 
                         shiftsVar.Set (updated |> List.sortBy (fun x -> x.Date))
                         editingShiftVar.Set None
+                        dateInputVar.Set ""
+                        noteInputVar.Set ""
+                        selectedShiftTypeVar.Set Day
+                        formMessageVar.Set "Shift entry updated successfully."
 
                     | None ->
                         shiftsVar.Set (
                             shiftsVar.Value
-                            @ [ newEntry]
+                            @ [ newEntry ]
                             |> List.sortBy (fun x -> x.Date)
                         )
-                    
-                    dateInputVar.Set ""
-                    noteInputVar.Set ""
-                    selectedShiftTypeVar.Set Day
-                    formMessageVar.Set "Shift entry added successfully."
+                        dateInputVar.Set ""
+                        noteInputVar.Set ""
+                        selectedShiftTypeVar.Set Day
+                        formMessageVar.Set "Shift entry added successfully."
 
                     async {
                         do! Async.Sleep 2000
@@ -380,9 +363,6 @@ module Client =
                     p [attr.``class`` "text-gray-700 mb-3"] [
                         text "Shift Planner Alpha is being developed step by step as a semester project."
                     ]
-                    p [attr.``class`` "text-gray-600"] [
-                        text "Later versions can include sorting, filtering, summaries, and workload analysis."
-                    ]
                 ]
             ]
         ]
@@ -448,29 +428,45 @@ module Client =
                         ]
                     ]
 
-                    div [attr.``class`` "mt-4"] [
-                        button [
-                            attr.``type`` "button"
-                            attr.``class`` "px-5 py-2 rounded-lg bg-blue-600 text-white font-medium"
-                            on.click (fun _ _ -> addShift ())
-                        ] [
-                            Doc.BindView (fun editing ->
-                                match editing with
-                                | Some _ -> 
-                                    button [
-                                        attr.``class`` "ml-3 px-5 py-2 rounded-lg bg-gray-300 text-gray-800 font-medium"
-                                        on.click (fun _ _ ->
-                                            editingShiftVar.Set None
-                                            dateInputVar.Set ""
-                                            noteInputVar.Set ""
-                                            selectedShiftTypeVar.Set Day
-                                        )
-                                    ] [
-                                        text "Cancel"
-                                    ]
-                                | None -> Doc.Empty
-                            ) editingShiftVar.View
-                        ]
+                    div [attr.``class`` "mt-4 flex items-center gap-3"] [
+                        Doc.BindView (fun editing ->
+                            match editing with
+                            | Some _ ->
+                                button [
+                                    attr.``type`` "button"
+                                    attr.``class`` "px-5 py-2 rounded-lg bg-blue-600 text-white font-medium"
+                                    on.click (fun _ _ -> addShift ())
+                                ] [
+                                    text "Save changes"
+                                ]
+                            | None ->
+                                button [
+                                    attr.``type`` "button"
+                                    attr.``class`` "px-5 py-2 rounded-lg bg-blue-600 text-white font-medium"
+                                    on.click (fun _ _ -> addShift ())
+                                ] [
+                                    text "Add shift"
+                                ]
+                        ) editingShiftVar.View
+
+                        Doc.BindView (fun editing ->
+                            match editing with
+                            | Some _ ->
+                                button [
+                                    attr.``type`` "button"
+                                    attr.``class`` "px-5 py-2 rounded-lg bg-gray-300 text-gray-800 font-medium"
+                                    on.click (fun _ _ ->
+                                        editingShiftVar.Set None
+                                        dateInputVar.Set ""
+                                        noteInputVar.Set ""
+                                        selectedShiftTypeVar.Set Day
+                                        formMessageVar.Set ""
+                                    )
+                                ] [
+                                    text "Cancel"
+                                ]
+                            | None -> Doc.Empty
+                        ) editingShiftVar.View
                     ]
 
                     formMessage ()
@@ -500,7 +496,9 @@ module Client =
                 shiftList ()
             ]
 
-            projectDetailsSection
+            section [attr.id "about"] [
+                projectDetailsSection
+            ]
 
         ]
 
